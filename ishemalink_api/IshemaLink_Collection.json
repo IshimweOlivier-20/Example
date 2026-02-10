@@ -1,0 +1,443 @@
+{
+  "info": {
+    "name": "IshemaLink API Collection",
+    "description": "Complete API collection for IshemaLink logistics platform",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health & Auth",
+      "item": [
+        {
+          "name": "API Root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/",
+              "host": ["{{base_url}}"],
+              "path": ["api", ""]
+            }
+          }
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/status/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "status", ""]
+            }
+          }
+        },
+        {
+          "name": "Register Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+250788123456\",\n  \"password\": \"securepass123\",\n  \"user_type\": \"CUSTOMER\",\n  \"national_id\": \"1199870123456789\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register", ""]
+            }
+          }
+        },
+        {
+          "name": "Verify NID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"national_id\": \"1199870123456789\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/verify-nid/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "verify-nid", ""]
+            }
+          }
+        },
+        {
+          "name": "Get User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/users/me/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "users", "me", ""]
+            }
+          }
+        },
+        {
+          "name": "Agent Onboarding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+250722456789\",\n  \"password\": \"agentpass123\",\n  \"national_id\": \"1198570234567890\",\n  \"assigned_sector\": \"Kicukiro/Niboye\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/users/agents/onboard/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "users", "agents", "onboard", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Domestic Shipments",
+      "item": [
+        {
+          "name": "Create Domestic Shipment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"origin\": \"Kigali\",\n  \"destination\": \"Huye\",\n  \"transport_type\": \"BUS\",\n  \"weight_kg\": 5.0,\n  \"description\": \"Agricultural produce\",\n  \"cost\": 4500,\n  \"recipient_name\": \"Jean Mukama\",\n  \"recipient_phone\": \"+250730987654\",\n  \"delivery_notes\": \"Handle with care\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/domestic/shipments/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "domestic", "shipments", ""]
+            }
+          }
+        },
+        {
+          "name": "List Domestic Shipments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/domestic/shipments/?page=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "domestic", "shipments", ""],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filter by Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/domestic/shipments/?status=IN_TRANSIT",
+              "host": ["{{base_url}}"],
+              "path": ["api", "domestic", "shipments", ""],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "IN_TRANSIT"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search by Tracking Number",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/domestic/shipments/?search=RW-D-",
+              "host": ["{{base_url}}"],
+              "path": ["api", "domestic", "shipments", ""],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "RW-D-"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Shipment Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/domestic/shipments/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "domestic", "shipments", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. International Shipments",
+      "item": [
+        {
+          "name": "Create International Shipment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"origin\": \"Kigali\",\n  \"destination\": \"Kampala\",\n  \"destination_country\": \"UGANDA\",\n  \"weight_kg\": 15.0,\n  \"description\": \"Commercial goods\",\n  \"cost\": 25000,\n  \"estimated_value\": 500000,\n  \"recipient_name\": \"Peter Okello\",\n  \"recipient_phone\": \"+256700123456\",\n  \"recipient_address\": \"Kampala Road, Kampala, Uganda\",\n  \"customs_declaration\": \"Agricultural machinery parts\",\n  \"customs_documents\": [\n    {\n      \"document_type\": \"TIN\",\n      \"document_number\": \"123456789\",\n      \"issuing_authority\": \"RRA\"\n    },\n    {\n      \"document_type\": \"PASSPORT\",\n      \"document_number\": \"PC1234567\",\n      \"issuing_authority\": \"Rwanda Immigration\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/international/shipments/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "international", "shipments", ""]
+            }
+          }
+        },
+        {
+          "name": "List International Shipments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/international/shipments/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "international", "shipments", ""]
+            }
+          }
+        },
+        {
+          "name": "Filter by Destination Country",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/international/shipments/?destination_country=UGANDA",
+              "host": ["{{base_url}}"],
+              "path": ["api", "international", "shipments", ""],
+              "query": [
+                {
+                  "key": "destination_country",
+                  "value": "UGANDA"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Async Tracking",
+      "item": [
+        {
+          "name": "Update Shipment Status (Async)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_TRANSIT\",\n  \"location\": \"Nyabugogo Hub\",\n  \"notes\": \"Package loaded onto bus\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/domestic/shipments/1/update-status/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "domestic", "shipments", "1", "update-status", ""]
+            }
+          }
+        },
+        {
+          "name": "Batch Update (Async)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tracking_numbers\": [\n    \"RW-D-12345678\",\n    \"RW-D-87654321\",\n    \"RW-D-ABCDEF12\"\n  ],\n  \"status\": \"DELIVERED\",\n  \"location\": \"Recipient address\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/domestic/shipments/batch-update/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "domestic", "shipments", "batch-update", ""]
+            }
+          }
+        },
+        {
+          "name": "Get Tracking History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/domestic/shipments/1/tracking/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "domestic", "shipments", "1", "tracking", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Pricing & Caching",
+      "item": [
+        {
+          "name": "Get Tariffs (Cached)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pricing/tariffs/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pricing", "tariffs", ""]
+            }
+          }
+        },
+        {
+          "name": "Calculate Shipping Cost",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination\": \"Huye\",\n  \"weight_kg\": 5.0\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/pricing/calculate/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pricing", "calculate", ""]
+            }
+          }
+        },
+        {
+          "name": "Clear Tariff Cache (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pricing/admin/cache/clear-tariffs/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pricing", "admin", "cache", "clear-tariffs", ""]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

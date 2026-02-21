@@ -172,9 +172,12 @@ class BaseShipment(models.Model):
     """
     STATUS_CHOICES = [
         ('PENDING', 'Pending'),
+        ('PENDING_PAYMENT', 'Pending Payment'),
         ('PICKED_UP', 'Picked Up'),
         ('IN_TRANSIT', 'In Transit'),
+        ('ASSIGNED', 'Assigned'),
         ('DELIVERED', 'Delivered'),
+        ('PAYMENT_FAILED', 'Payment Failed'),
         ('CANCELLED', 'Cancelled'),
     ]
     
@@ -191,6 +194,19 @@ class BaseShipment(models.Model):
     
     # Pricing
     cost = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Payment tracking (Grand Integration)
+    payment_confirmed = models.BooleanField(default=False, help_text="Set to True when payment webhook received")
+    
+    # Driver assignment (Grand Integration)
+    driver = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='%(class)s_assigned_shipments',
+        limit_choices_to={'user_type': 'DRIVER'}
+    )
     
     # Status tracking
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')

@@ -31,7 +31,7 @@ services:
 
   # PgBouncer for connection pooling
   pgbouncer:
-    image: edoburu/pgbouncer:1.21.0
+    image: edoburu/pgbouncer:latest
     environment:
       DATABASE_URL: "postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}"
       POOL_MODE: transaction

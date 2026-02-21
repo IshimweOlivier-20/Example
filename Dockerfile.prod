@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Project files
+COPY . .
+
+# Collect static files
+RUN python manage.py collectstatic --noinput
+
+ENV PYTHONUNBUFFERED=1
+
+CMD ["gunicorn", "-c", "gunicorn_conf.py", "ishemalink.asgi:application"]

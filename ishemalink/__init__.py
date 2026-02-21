@@ -1,11 +1,9 @@
 """
-ASGI config for ishemalink project.
+Django initialization.
 """
-
-import os
-
-from django.core.asgi import get_asgi_application
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ishemalink.settings')
-
-application = get_asgi_application()
+# Optional Celery integration - only import if installed
+try:
+    from .celery import app as celery_app
+    __all__ = ('celery_app',)
+except ImportError:
+    pass

@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'django_filters',
     'corsheaders',
+    'channels',
     
     # Local apps
     'core',
@@ -47,6 +48,8 @@ INSTALLED_APPS = [
     'international',
     'shipments',
     'billing',
+    'analytics',
+    'government',
 ]
 
 MIDDLEWARE = [
@@ -84,6 +87,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'ishemalink.wsgi.application'
+ASGI_APPLICATION = 'ishemalink.asgi.application'
 
 # Database
 # Use SQLite for development/testing (no Docker required)
@@ -155,6 +159,28 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ============================================================================
 # REST FRAMEWORK CONFIGURATION
 # ============================================================================
+
+# ============================================================================
+# CHANNELS / WEBSOCKETS
+# ============================================================================
+
+REDIS_URL = config('REDIS_URL', default=None)
+
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [REDIS_URL]
+            }
+        }
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer'
+        }
+    }
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -327,6 +353,17 @@ CORS_ALLOW_CREDENTIALS = True  # Allow cookies for session auth
 
 SMS_GATEWAY_URL = config('SMS_GATEWAY_URL', default='mock://localhost')
 SMS_GATEWAY_API_KEY = config('SMS_GATEWAY_API_KEY', default='')
+
+# ============================================================================
+# CELERY CONFIGURATION
+# ============================================================================
+
+CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Africa/Kigali'
 
 # ============================================================================
 # LOGGING CONFIGURATION

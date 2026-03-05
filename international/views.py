@@ -1,7 +1,7 @@
 """
 International shipment views.
 """
-from rest_framework import generics, filters
+from rest_framework import generics, filters, viewsets
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -11,6 +11,26 @@ from .serializers import (
     InternationalShipmentCreateSerializer,
     CustomsDocumentSerializer
 )
+
+
+class InternationalShipmentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for international shipments.
+    """
+    queryset = InternationalShipment.objects.all()
+    serializer_class = InternationalShipmentSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['status', 'destination_country']
+    search_fields = ['tracking_number', 'recipient_name']
+    
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return InternationalShipmentCreateSerializer
+        return InternationalShipmentSerializer
+    
+    def perform_create(self, serializer):
+        serializer.save(customer=self.request.user)
 
 
 class InternationalShipmentListCreateView(generics.ListCreateAPIView):

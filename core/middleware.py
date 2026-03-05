@@ -77,16 +77,17 @@ def extract_resource_info(path: str) -> tuple[str, str]:
     Returns:
         Tuple of (resource_type, resource_id)
     """
-    # Match patterns like /api/{resource}/{id}/
+    shipment_match = re.search(r'/api/(domestic|international)/shipments/(\d+)/', path)
+    if shipment_match:
+        return shipment_match.group(1), shipment_match.group(2)
+
     match = re.search(r'/api/(\w+)/(\d+)/', path)
     if match:
         return match.group(1), match.group(2)
-    
-    # Match /api/users/me/
+
     if '/users/me/' in path:
         return 'user_profile', 'me'
-    
-    # Default
+
     return 'unknown', ''
 
 

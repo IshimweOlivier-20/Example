@@ -43,6 +43,31 @@ class RRAConnector:
         self.api_key = api_key or "MOCK_RRA_API_KEY"
         self.ebm_url = "https://ebm.rra.gov.rw/api/v1"  # Production URL
     
+    def submit_tax_receipt(
+        self,
+        invoice_number: str,
+        amount: Decimal,
+        tax_amount: Decimal
+    ) -> Dict[str, Any]:
+        """
+        Submit tax receipt to RRA.
+        
+        Args:
+            invoice_number: Invoice reference
+            amount: Total amount
+            tax_amount: Tax component
+            
+        Returns:
+            Receipt confirmation
+        """
+        receipt = self.sign_receipt(
+            amount=amount,
+            tax_amount=tax_amount,
+            transaction_id=invoice_number
+        )
+        receipt['receipt_number'] = receipt['ebm_receipt_number']
+        return receipt
+    
     def sign_receipt(
         self,
         amount: Decimal,
@@ -177,35 +202,36 @@ class RURAConnector:
     def verify_driver_license(self, license_number: str) -> Dict[str, Any]:
         """
         Verify driver's license validity with RURA.
-        
+
         Checks:
         - License is active and not suspended
         - No traffic violations pending
         - Medical certificate is current
-        
+
         Args:
             license_number: Rwanda driver's license number
-            
+
         Returns:
             Verification result with expiry date
-            
+
         Raises:
             LicenseInvalidException: License suspended or expired
         """
         # Simulate RURA database lookup
         # In production: GET request to RURA portal
-        
+
         # Mock response - in reality would check RURA database
-        is_valid = license_number.startswith('RW')  # Simple validation
-        
-        if not is_valid:
+        is_valid = bool(license_number) and license_number.startswith(('RW', 'DL'))
+
+        if not is_valid and license_number:
             raise LicenseInvalidException(
                 f"Invalid license format: {license_number}"
             )
-        
+
         verification = {
             'license_number': license_number,
-            'status': 'ACTIVE',
+            'is_valid': bool(license_number),
+            'status': 'ACTIVE' if is_valid else 'INVALID',
             'driver_name': 'MOCK DRIVER',  # Production: Real name from RURA
             'category': 'C',  # Heavy vehicle category
             'issue_date': '2020-01-01',
@@ -214,35 +240,35 @@ class RURAConnector:
             'medical_cert_valid': True,
             'verified_at': datetime.now().isoformat()
         }
-        
-        logger.info(f"Driver license verified: {license_number} - ACTIVE")
-        
+
+        logger.info(f"Driver license verified: {license_number} - {verification['status']}")
+
         return verification
     
     def verify_vehicle_insurance(self, plate_number: str) -> Dict[str, Any]:
         """
         Verify vehicle insurance with RURA.
-        
+
         Checks:
         - Third-party insurance is active
         - Goods-in-transit coverage is valid
         - No outstanding insurance claims
-        
+
         Args:
             plate_number: Rwanda vehicle plate number
-            
+
         Returns:
             Insurance verification result
         """
         # In production: Query RURA insurance database
-        
+
         is_valid = plate_number.startswith('RAD')  # Rwanda plate format
-        
+
         if not is_valid:
             raise InsuranceInvalidException(
                 f"Invalid plate number: {plate_number}"
             )
-        
+
         insurance = {
             'plate_number': plate_number,
             'status': 'ACTIVE',
@@ -254,9 +280,9 @@ class RURAConnector:
             'expiry_date': (datetime.now() + timedelta(days=180)).date().isoformat(),
             'verified_at': datetime.now().isoformat()
         }
-        
+
         logger.info(f"Vehicle insurance verified: {plate_number} - ACTIVE")
-        
+
         return insurance
     
     def verify_transport_authorization(
@@ -341,6 +367,16 @@ class CustomsConnector:
     
     Purpose: Generate EAC-compliant customs manifests for cross-border shipments
     """
+
+    def submit_manifest(self, manifest: Dict[str, Any]) -> Dict[str, Any]:
+        """Submit customs manifest and return an acknowledgment payload."""
+        manifest_number = manifest.get('shipment_id') or f"MF-{uuid.uuid4().hex[:8].upper()}"
+        return {
+            'manifest_number': manifest_number,
+            'status': 'SUBMITTED',
+            'submitted_at': datetime.now().isoformat(),
+            'manifest_xml': self.generate_manifest_xml(manifest)
+        }
     
     def generate_manifest_xml(
         self,

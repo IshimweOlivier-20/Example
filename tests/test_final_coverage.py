@@ -16,7 +16,7 @@ User = get_user_model()
 class TestValidatorHelpers:
     def test_extract_birth_year_1990s(self):
         year = extract_birth_year_from_nid('1199870123456789')
-        assert year == 1987
+        assert year == 1998
     
     def test_extract_birth_year_1980s(self):
         year = extract_birth_year_from_nid('1198570123456789')
@@ -598,7 +598,7 @@ class TestAllValidators:
         assert validate_rwanda_nid('1199870123456789')[0] is True
         assert validate_tin('123456789')[0] is True
         assert validate_passport('AB123456')[0] is True
-        assert extract_birth_year_from_nid('1199870123456789') == 1987
+        assert extract_birth_year_from_nid('1199870123456789') == 1998
 
 
 
@@ -619,7 +619,7 @@ class TestValidatorsMissingLines:
     def test_nid_with_birth_year_validation(self):
         from core.validators import validate_rwanda_nid
         # Test with matching birth year
-        is_valid, error = validate_rwanda_nid('1199870123456789', 1987)
+        is_valid, error = validate_rwanda_nid('1199870123456789', 1998)
         assert is_valid is True
         
         # Test with mismatching birth year

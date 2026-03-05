@@ -108,15 +108,15 @@ class TestNIDVerificationSerializer:
     def test_valid_nid(self):
         data = {
             'national_id': '1199870123456789',
-            'birth_year': 1987
+            'birth_year': 1998
         }
         serializer = NIDVerificationSerializer(data=data)
         assert serializer.is_valid()
-    
+
     def test_invalid_nid_format(self):
         data = {
             'national_id': '119987012345',
-            'birth_year': 1987
+            'birth_year': 1998
         }
         serializer = NIDVerificationSerializer(data=data)
         assert not serializer.is_valid()

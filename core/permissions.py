@@ -128,7 +128,12 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
     """
     Object-level permission: Only owner can modify, others can read (if authenticated).
     """
-    
+
+    @staticmethod
+    def _has_explicit_attr(obj: Any, attr_name: str) -> bool:
+        obj_dict = getattr(obj, '__dict__', {})
+        return attr_name in obj_dict
+
     def has_object_permission(self, request, view, obj: Any) -> bool:
         """
         Read permissions to authenticated users.
@@ -142,20 +147,16 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         Returns:
             Boolean indicating permission
         """
-        # Read permissions for authenticated users
         if request.method in permissions.SAFE_METHODS:
             return request.user.is_authenticated
-        
-        # Write permissions only for owner
-        # Handle different object types
-        if hasattr(obj, 'customer'):
-            return obj.customer == request.user
-        elif hasattr(obj, 'user'):
-            return obj.user == request.user
-        elif hasattr(obj, 'owner'):
-            return obj.owner == request.user
-        
-        # Default to admin-only write
+
+        if self._has_explicit_attr(obj, 'customer'):
+            return getattr(obj, 'customer') == request.user
+        if self._has_explicit_attr(obj, 'user'):
+            return getattr(obj, 'user') == request.user
+        if self._has_explicit_attr(obj, 'owner'):
+            return getattr(obj, 'owner') == request.user
+
         return request.user.user_type == 'ADMIN'
 
 

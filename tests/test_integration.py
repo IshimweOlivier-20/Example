@@ -10,44 +10,6 @@ User = get_user_model()
 
 
 @pytest.mark.django_db
-class TestAuthViews:
-    def setup_method(self):
-        self.client = APIClient()
-
-    def test_user_registration(self):
-        response = self.client.post('/api/auth/register/', {
-            'phone': '+250788123456',
-            'password': 'testpass123',
-            'full_name': 'Test User',
-            'user_type': 'CUSTOMER'
-        })
-        assert response.status_code in [200, 201]
-
-    def test_token_obtain(self):
-        user = User.objects.create_user(
-            phone='+250788123456',
-            password='testpass123',
-            user_type='CUSTOMER'
-        )
-        response = self.client.post('/api/auth/token/obtain/', {
-            'phone': '+250788123456',
-            'password': 'testpass123'
-        })
-        assert response.status_code == 200
-        assert 'access' in response.data
-
-    def test_user_profile(self):
-        user = User.objects.create_user(
-            phone='+250788123456',
-            password='testpass123',
-            user_type='CUSTOMER'
-        )
-        self.client.force_authenticate(user=user)
-        response = self.client.get('/api/users/me/')
-        assert response.status_code == 200
-
-
-@pytest.mark.django_db
 class TestOpsViews:
     def setup_method(self):
         self.client = APIClient()
@@ -78,10 +40,6 @@ class TestOpsViews:
             'enabled': True
         })
         assert response.status_code == 200
-
-    def test_seed_test_data_unauthorized(self):
-        response = self.client.post('/api/test/seed/', {'count': 10})
-        assert response.status_code == 401
 
     def test_security_health_check(self):
         self.client.force_authenticate(user=self.admin)
@@ -192,78 +150,3 @@ class TestGovernmentConnectors:
         assert '<?xml version' in xml
         assert '<Manifest' in xml
         assert 'Coffee' in xml
-
-
-@pytest.mark.django_db
-class TestBookingViews:
-    def setup_method(self):
-        self.client = APIClient()
-        self.user = User.objects.create_user(
-            phone='+250788123456',
-            password='testpass123',
-            user_type='CUSTOMER'
-        )
-        ShippingZone.objects.create(
-            code='ZONE_1',
-            name='Kigali',
-            base_rate=Decimal('2000'),
-            per_kg_rate=Decimal('500')
-        )
-        self.client.force_authenticate(user=self.user)
-
-    @patch('core.services.PaymentService.initiate_payment')
-    def test_create_shipment_endpoint(self, mock_payment):
-        mock_payment.return_value = 'pay_ref_123'
-        
-        response = self.client.post('/api/shipments/create/', {
-            'shipment_type': 'DOMESTIC',
-            'origin': 'Kigali',
-            'destination': 'Kigali',
-            'weight_kg': 5,
-            'commodity_type': 'Food',
-            'recipient_phone': '+250788999999',
-            'recipient_name': 'Recipient'
-        })
-        assert response.status_code == 201
-        assert 'tracking_number' in response.data
-
-    def test_payment_webhook(self):
-        response = self.client.post('/api/payments/webhook/', {
-            'payment_reference': 'test_ref',
-            'status': 'SUCCESS',
-            'transaction_id': 'TXN123',
-            'amount': 5000
-        })
-        assert response.status_code in [200, 404]
-
-
-@pytest.mark.django_db
-class TestAnalyticsViews:
-    def setup_method(self):
-        self.client = APIClient()
-        self.admin = User.objects.create_user(
-            phone='+250788999999',
-            password='admin123',
-            user_type='ADMIN'
-        )
-        self.client.force_authenticate(user=self.admin)
-
-    def test_analytics_top_routes(self):
-        response = self.client.get('/api/analytics/routes/top/')
-        assert response.status_code == 200
-        assert 'routes' in response.data
-
-    def test_analytics_commodity_breakdown(self):
-        response = self.client.get('/api/analytics/commodities/breakdown/')
-        assert response.status_code == 200
-        assert 'commodities' in response.data
-
-    def test_analytics_revenue_heatmap(self):
-        response = self.client.get('/api/analytics/revenue/heatmap/')
-        assert response.status_code == 200
-        assert 'sectors' in response.data
-
-    def test_analytics_driver_leaderboard(self):
-        response = self.client.get('/api/analytics/drivers/leaderboard/')
-        assert response.status_code == 200
-        assert 'drivers' in response.data

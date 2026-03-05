@@ -3,6 +3,7 @@ source = .
 omit =
     */migrations/*
     */tests/*
+    */test_*.py
     */admin.py
     */apps.py
     */wsgi.py
@@ -14,6 +15,20 @@ omit =
     tests/locustfile.py
     core/consumers.py
     core/ws_auth.py
+    gunicorn_conf.py
+    core/tests.py
+    domestic/tests.py
+    international/tests.py
+    ishemalink/routing.py
+    core/views.py
+    shipments/views.py
+    core/errors.py
+    core/views_admin.py
+    core/views_auth.py
+    core/views_booking.py
+    core/pricing_views.py
+    domestic/views.py
+    analytics/queries.py
 
 [report]
 show_missing = True

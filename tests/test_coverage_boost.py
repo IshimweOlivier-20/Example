@@ -130,21 +130,21 @@ class TestEncryption:
 @pytest.mark.django_db
 class TestPricing:
     def test_calculate_shipping_cost_zone1(self):
-        from core.pricing import calculate_shipping_cost
+        from core.pricing import calculate_shipping_cost, clear_tariff_cache
         from core.models import ShippingZone
         
-        ShippingZone.objects.get_or_create(
+        clear_tariff_cache()
+        ShippingZone.objects.filter(code='ZONE_1').delete()
+        ShippingZone.objects.create(
             code='ZONE_1',
-            defaults={
-                'name': 'Kigali',
-                'base_rate': Decimal('1500'),
-                'per_kg_rate': Decimal('200')
-            }
+            name='Kigali',
+            base_rate=Decimal('3000'),
+            per_kg_rate=Decimal('100')
         )
         
-        result = calculate_shipping_cost('Kigali', Decimal('5.0'))
+        result = calculate_shipping_cost('Kigali', Decimal('15.0'))
         assert result['zone'] == 'ZONE_1'
-        assert result['total_cost'] == Decimal('2500')
+        assert result['total_cost'] == 4500.0
 
     def test_calculate_shipping_cost_zone2(self):
         from core.pricing import calculate_shipping_cost
@@ -210,3 +210,94 @@ class TestModels:
             cost=Decimal('5000')
         )
         assert shipment.tracking_number.startswith('RW-D-')
+
+
+    def test_user_anonymize(self):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        user = User.objects.create_user(
+            phone='+250788123456',
+            password='test123',
+            full_name='John Doe',
+            nid_number='1199870123456789'
+        )
+        user.anonymize()
+        assert user.full_name == 'REDACTED'
+        assert user.is_active is False
+
+    def test_otp_is_valid(self):
+        from core.models import OTPVerification
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        otp = OTPVerification.objects.create(
+            phone='+250788123456',
+            otp_code='123456',
+            purpose='LOGIN',
+            expires_at=timezone.now() + timedelta(minutes=5)
+        )
+        assert otp.is_valid() is True
+
+    def test_audit_log_creation(self):
+        from core.models import AuditLog
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        user = User.objects.create_user(
+            phone='+250788123456',
+            password='test123'
+        )
+        
+        log = AuditLog.objects.create(
+            user=user,
+            user_phone=user.phone,
+            user_type=user.user_type,
+            action='VIEW',
+            resource_type='shipment',
+            resource_id='123',
+            endpoint='/api/shipments/123/',
+            request_method='GET'
+        )
+        assert log.action == 'VIEW'
+        assert log.user == user
+
+    def test_location_str(self):
+        from core.models import Location
+        
+        province = Location.objects.create(
+            name='Kigali',
+            location_type='PROVINCE'
+        )
+        district = Location.objects.create(
+            name='Gasabo',
+            location_type='DISTRICT',
+            parent=province
+        )
+        assert str(district) == 'Kigali/Gasabo'
+
+    def test_international_shipment(self):
+        from international.models import InternationalShipment
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        user = User.objects.create_user(
+            phone='+250788123456',
+            password='test123'
+        )
+        
+        shipment = InternationalShipment.objects.create(
+            customer=user,
+            origin='Kigali',
+            destination='Kampala',
+            destination_country='UG',
+            weight_kg=Decimal('10.0'),
+            description='Coffee',
+            recipient_phone='+256700000000',
+            recipient_name='Buyer',
+            recipient_address='Kampala Road',
+            cost=Decimal('15000'),
+            estimated_value=Decimal('50000')
+        )
+        assert shipment.tracking_number.startswith('RW-')
+        assert shipment.destination_country == 'UG'

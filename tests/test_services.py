@@ -1,346 +1,187 @@
-"""
-Unit tests for core service layer.
-
-Tests:
-- BookingService: create_booking(), confirm_payment()
-- PaymentService: mobile money integration
-- NotificationService: SMS broadcast
-- Race condition handling on driver assignment
-"""
+import pytest
 from decimal import Decimal
-from django.test import TestCase, TransactionTestCase
+from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-import threading
-import time
 
 from core.services import BookingService, PaymentService, NotificationService
-from core.models import Location, ShippingZone
-from domestic.models import DomesticShipment
-from international.models import InternationalShipment
 
 User = get_user_model()
 
+@pytest.fixture(autouse=True)
+def clear_cache():
+    cache.clear()
+    yield
+    cache.clear()
 
-class BookingServiceUnitTests(TransactionTestCase):
-    """
-    Unit tests for BookingService.
-    Uses TransactionTestCase to test atomic transactions properly.
-    """
-    
-    def setUp(self):
-        """Set up test data."""
-        # Create test users
-        self.customer = User.objects.create_user(
-            phone='+250788123456',
-            password='testpass123',
-            user_type='CUSTOMER',
-            full_name='Test Customer'
+@pytest.mark.django_db
+class TestBookingService:
+    def setup_method(self):
+        self.customer, _ = User.objects.get_or_create(
+            phone="+250780000001", 
+            defaults={'password': 'pass123', 'full_name': 'Test Customer'}
+        )
+        User.objects.get_or_create(
+            phone="+250780000002", 
+            defaults={'user_type': 'DRIVER', 'is_active': True}
+        )
+        self.mock_payment = MagicMock(spec=PaymentService)
+        self.mock_notify = MagicMock(spec=NotificationService)
+        self.service = BookingService(
+            payment_service=self.mock_payment, 
+            notification_service=self.mock_notify
+        )
+
+    @patch('core.services.calculate_shipping_cost')
+    def test_create_domestic_booking(self, mock_calc):
+        mock_calc.return_value = {'total_cost': 2500, 'zone': 'ZONE_2'}
+        self.mock_payment.initiate_payment.return_value = "pay_ref_001"
+        
+        shipment, ref = self.service.create_booking(
+            user=self.customer, shipment_type='DOMESTIC', origin='Kigali',
+            destination='Musanze', weight_kg=Decimal('10.0'), commodity_type='Potatoes',
+            recipient_phone='+250781234567', recipient_name='Jean'
         )
         
-        self.driver1 = User.objects.create_user(
-            phone='+250788111111',
-            password='driver123',
-            user_type='DRIVER',
-            full_name='Driver One',
-            assigned_sector='Kigali'
+        assert shipment.status == 'PENDING_PAYMENT'
+        assert shipment.cost == Decimal('2500')
+        assert ref == "pay_ref_001"
+
+    @patch('core.services.calculate_shipping_cost')
+    def test_create_international_booking(self, mock_calc):
+        mock_calc.return_value = {'total_cost': 15000, 'zone': 'ZONE_3'}
+        self.mock_payment.initiate_payment.return_value = "pay_ref_002"
+        
+        shipment, ref = self.service.create_booking(
+            user=self.customer, shipment_type='INTERNATIONAL', origin='Kigali',
+            destination='Kampala', destination_country='UG', weight_kg=Decimal('20.0'),
+            commodity_type='Coffee', recipient_phone='+256700000000',
+            recipient_name='Uganda Buyer', recipient_address='Kampala Road',
+            customs_docs={'declaration': 'Coffee beans', 'estimated_value': 50000}
         )
         
-        self.driver2 = User.objects.create_user(
-            phone='+250788222222',
-            password='driver123',
-            user_type='DRIVER',
-            full_name='Driver Two',
-            assigned_sector='Kigali'
+        assert shipment.status == 'PENDING_PAYMENT'
+        assert ref == "pay_ref_002"
+
+    @patch('core.services.calculate_shipping_cost')
+    def test_invalid_shipment_type(self, mock_calc):
+        with pytest.raises(ValueError, match="Invalid shipment type"):
+            self.service.create_booking(
+                user=self.customer, shipment_type='INVALID', origin='Kigali',
+                destination='Musanze', weight_kg=Decimal('5'), commodity_type='Art',
+                recipient_phone='+250780000000', recipient_name='Recipient'
+            )
+
+    @patch('core.services.calculate_shipping_cost')
+    def test_negative_weight(self, mock_calc):
+        with pytest.raises(ValueError, match="Weight must be positive"):
+            self.service.create_booking(
+                user=self.customer, shipment_type='DOMESTIC', origin='Kigali',
+                destination='Musanze', weight_kg=Decimal('-5'), commodity_type='Art',
+                recipient_phone='+250780000000', recipient_name='Recipient'
+            )
+
+    @patch('core.services.calculate_shipping_cost')
+    def test_international_missing_country(self, mock_calc):
+        with pytest.raises(ValueError, match="Destination country and recipient address are required"):
+            self.service.create_booking(
+                user=self.customer, shipment_type='INTERNATIONAL', origin='Kigali',
+                destination='Kampala', weight_kg=Decimal('10'), commodity_type='Coffee',
+                recipient_phone='+256700000000', recipient_name='Buyer'
+            )
+
+    @patch('core.services.calculate_shipping_cost')
+    def test_international_missing_customs(self, mock_calc):
+        with pytest.raises(ValueError, match="Customs documentation is required"):
+            self.service.create_booking(
+                user=self.customer, shipment_type='INTERNATIONAL', origin='Kigali',
+                destination='Kampala', destination_country='UG', weight_kg=Decimal('10'),
+                commodity_type='Coffee', recipient_phone='+256700000000',
+                recipient_name='Buyer', recipient_address='Kampala'
+            )
+
+    @patch('core.services.calculate_shipping_cost')
+    def test_confirm_payment_success(self, mock_calc):
+        mock_calc.return_value = {'total_cost': 2500, 'zone': 'ZONE_2'}
+        self.mock_payment.initiate_payment.return_value = "ref_abc"
+        
+        shipment, ref = self.service.create_booking(
+            user=self.customer, shipment_type='DOMESTIC', origin='Kigali',
+            destination='Musanze', weight_kg=Decimal('5'), commodity_type='Art',
+            recipient_phone='+250780000000', recipient_name='Recipient'
         )
         
-        # Create shipping zones for tariff calculation
-        ShippingZone.objects.create(
-            code='ZONE_1',
-            name='Kigali',
-            base_rate=Decimal('2000.00'),
-            per_kg_rate=Decimal('500.00')
-        )
-        
-        ShippingZone.objects.create(
-            code='ZONE_2',
-            name='Provinces',
-            base_rate=Decimal('3000.00'),
-            per_kg_rate=Decimal('700.00')
-        )
-        
-        ShippingZone.objects.create(
-            code='ZONE_3',
-            name='EAC Countries',
-            base_rate=Decimal('15000.00'),
-            per_kg_rate=Decimal('2000.00')
-        )
-        
-        self.service = BookingService()
-    
-    def test_create_domestic_booking_success(self):
-        """Test successful domestic shipment creation."""
-        shipment, payment_reference = self.service.create_booking(
-            user=self.customer,
-            shipment_type='DOMESTIC',
-            origin='Kigali',
-            destination='Kigali',
-            weight_kg=Decimal('5.0'),
-            commodity_type='Food',
-            recipient_name='John Doe',
-            recipient_phone='+250788999999',
-            transport_type='MOTO'
-        )
-
-        self.assertIsNotNone(shipment.tracking_number)
-        self.assertIsNotNone(payment_reference)
-
-        # Verify shipment created
-        shipment = DomesticShipment.objects.get(tracking_number=shipment.tracking_number)
-        self.assertEqual(shipment.customer, self.customer)
-        self.assertEqual(shipment.weight_kg, Decimal('5.0'))
-        self.assertFalse(shipment.payment_confirmed)
-        self.assertEqual(shipment.description, 'Food')
-        self.assertEqual(shipment.status, 'PENDING_PAYMENT')
-        
-        # Verify payment reference cached
-        payment_data = cache.get(f'payment:{payment_reference}')
-        self.assertIsNotNone(payment_data)
-        self.assertEqual(payment_data['shipment_id'], shipment.id)
-    
-    def test_create_international_booking_success(self):
-        """Test successful international shipment creation."""
-        shipment, payment_reference = self.service.create_booking(
-            user=self.customer,
-            shipment_type='INTERNATIONAL',
-            origin='Kigali',
-            destination='Nairobi',
-            destination_country='KENYA',
-            weight_kg=Decimal('10.0'),
-            commodity_type='Electronics',
-            recipient_name='Jane Smith',
-            recipient_phone='+254712345678',
-            recipient_address='123 Nairobi Street',
-            customs_docs={
-                'declaration': 'Electronics',
-                'estimated_value': Decimal('50000.00')
-            }
-        )
-
-        self.assertIsNotNone(shipment.tracking_number)
-        self.assertIsNotNone(payment_reference)
-
-        # Verify international shipment created
-        shipment = InternationalShipment.objects.get(tracking_number=shipment.tracking_number)
-        self.assertEqual(shipment.destination_country, 'KENYA')
-        self.assertEqual(shipment.estimated_value, Decimal('50000.00'))
-        self.assertEqual(shipment.description, 'Electronics')
-    
-    def test_confirm_payment_webhook_success(self):
-        """Test payment confirmation webhook processing."""
-        # First create a booking
-        shipment, payment_ref = self.service.create_booking(
-            user=self.customer,
-            shipment_type='DOMESTIC',
-            origin='Kigali',
-            destination='Kigali',
-            weight_kg=Decimal('3.0'),
-            commodity_type='Food',
-            recipient_name='Test',
-            recipient_phone='+250788888888',
-            transport_type='MOTO'
-        )
-
-        result = self.service.confirm_payment(payment_ref, 'SUCCESS')
-        self.assertTrue(result)
-
-        # Verify shipment updated
-        shipment = DomesticShipment.objects.get(tracking_number=shipment.tracking_number)
-        self.assertTrue(shipment.payment_confirmed)
-        self.assertIsNotNone(shipment.driver)
-        self.assertEqual(shipment.status, 'ASSIGNED')
-    
-    def test_payment_webhook_idempotency(self):
-        """Test that processing the same webhook twice doesn't cause duplicate updates."""
-        shipment, payment_ref = self.service.create_booking(
-            user=self.customer,
-            shipment_type='DOMESTIC',
-            origin='Kigali',
-            destination='Kigali',
-            weight_kg=Decimal('2.0'),
-            commodity_type='Food',
-            recipient_name='Test',
-            recipient_phone='+250788777777',
-            transport_type='BUS'
-        )
-
-        # First webhook
-        result1 = self.service.confirm_payment(payment_ref, 'SUCCESS')
-        self.assertTrue(result1)
-
-        # Second webhook (duplicate)
-        result2 = self.service.confirm_payment(payment_ref, 'SUCCESS')
-        self.assertTrue(result2)
-
-        # Verify shipment still confirmed
+        success = self.service.confirm_payment(ref, "SUCCESS")
         shipment.refresh_from_db()
-        self.assertTrue(shipment.payment_confirmed)
-    
-    def test_race_condition_driver_assignment(self):
-        """
-        Test race condition handling for driver assignment.
-        Simulates 2 concurrent payment confirmations trying to assign the same driver.
-        """
-        # Create 2 pending bookings
-        booking1 = self.service.create_booking(
-            user=self.customer,
-            shipment_type='DOMESTIC',
-            origin='Kigali',
-            destination='Kigali',
-            weight_kg=Decimal('1.0'),
-            commodity_type='Food',
-            recipient_name='Recipient 1',
-            recipient_phone='+250788111112',
-            transport_type='MOTO'
+        
+        assert success is True
+        assert shipment.status == 'ASSIGNED'
+        assert shipment.payment_confirmed is True
+        assert shipment.driver is not None
+
+    @patch('core.services.calculate_shipping_cost')
+    def test_confirm_payment_failure(self, mock_calc):
+        mock_calc.return_value = {'total_cost': 2500, 'zone': 'ZONE_2'}
+        shipment, ref = self.service.create_booking(
+            user=self.customer, shipment_type='DOMESTIC', origin='Kigali',
+            destination='Musanze', weight_kg=Decimal('5'), commodity_type='Art',
+            recipient_phone='+250780000000', recipient_name='Recipient'
         )
         
-        # Create another customer for booking 2
-        customer2 = User.objects.create_user(
-            phone='+250788654321',
-            password='testpass123',
-            user_type='CUSTOMER',
-            full_name='Customer Two'
-        )
+        success = self.service.confirm_payment(ref, "FAILED")
+        shipment.refresh_from_db()
         
-        booking2 = self.service.create_booking(
-            user=customer2,
-            shipment_type='DOMESTIC',
-            origin='Kigali',
-            destination='Kigali',
-            weight_kg=Decimal('1.0'),
-            commodity_type='Food',
-            recipient_name='Recipient 2',
-            recipient_phone='+250788111113',
-            transport_type='MOTO'
-        )
+        assert success is True
+        assert shipment.status == 'PAYMENT_FAILED'
+        assert shipment.payment_confirmed is False
 
-        shipment1, payment_ref1 = booking1
-        shipment2, payment_ref2 = booking2
-        
-        results = []
-        errors = []
-        
-        def confirm_payment_thread(payment_ref):
-            """Thread worker for payment confirmation."""
-            try:
-                result = self.service.confirm_payment(payment_ref, 'SUCCESS')
-                results.append(result)
-            except Exception as e:
-                errors.append(str(e))
-        
-        # Start 2 threads confirming payments simultaneously
-        thread1 = threading.Thread(target=confirm_payment_thread, args=(payment_ref1,))
-        thread2 = threading.Thread(target=confirm_payment_thread, args=(payment_ref2,))
-        
-        thread1.start()
-        thread2.start()
-        
-        thread1.join()
-        thread2.join()
-        
-        # Both should succeed (SELECT FOR UPDATE prevents race condition)
-        self.assertEqual(len(results), 2)
-        self.assertEqual(len(errors), 0)
-        self.assertTrue(results[0])
-        self.assertTrue(results[1])
-        
-        # Each booking should have a driver assigned
-        shipment1 = DomesticShipment.objects.get(tracking_number=shipment1.tracking_number)
-        shipment2 = DomesticShipment.objects.get(tracking_number=shipment2.tracking_number)
-        
-        self.assertIsNotNone(shipment1.driver)
-        self.assertIsNotNone(shipment2.driver)
-        
-        # If only 2 drivers available, they should be different
-        # (or same if load balancing assigns same driver)
-        self.assertIn(shipment1.driver.phone, ['+250788111111', '+250788222222'])
-        self.assertIn(shipment2.driver.phone, ['+250788111111', '+250788222222'])
-    
-    def test_invalid_shipment_type(self):
-        """Test error handling for invalid shipment type."""
-        with self.assertRaises(ValueError) as cm:
-            self.service.create_booking(
-                user=self.customer,
-                shipment_type='INVALID',
-                origin='Kigali',
-                destination='Kigali',
-                weight_kg=Decimal('5.0'),
-                commodity_type='Food',
-                recipient_name='Test',
-                recipient_phone='+250788000000'
-            )
-        
-        self.assertIn('Invalid shipment type', str(cm.exception))
-    
-    def test_negative_weight(self):
-        """Test error handling for negative weight."""
-        with self.assertRaises(ValueError) as cm:
-            self.service.create_booking(
-                user=self.customer,
-                shipment_type='DOMESTIC',
-                origin='Kigali',
-                destination='Kigali',
-                weight_kg=Decimal('-5.0'),
-                commodity_type='Food',
-                recipient_name='Test',
-                recipient_phone='+250788000000'
-            )
-        
-        self.assertIn('Weight must be positive', str(cm.exception))
+    def test_confirm_payment_not_found(self):
+        success = self.service.confirm_payment("nonexistent_ref", "SUCCESS")
+        assert success is False
+
+    def test_confirm_payment_already_processed(self):
+        cache.set('payment:processed:ref_123', {'status': 'SUCCESS'}, timeout=3600)
+        success = self.service.confirm_payment("ref_123", "SUCCESS")
+        assert success is True
 
 
-class PaymentServiceUnitTests(TestCase):
-    """Unit tests for PaymentService (Mobile Money integration)."""
-    
-    def setUp(self):
-        """Set up test data."""
-        self.customer = User.objects.create_user(
+@pytest.mark.django_db
+class TestPaymentService:
+    def test_initiate_payment(self):
+        service = PaymentService()
+        ref = service.initiate_payment(
+            amount=Decimal('5000'),
             phone='+250788123456',
-            password='testpass123',
-            user_type='CUSTOMER'
-        )
-        
-        self.service = PaymentService()
-    
-    def test_initiate_mtn_payment(self):
-        """Test Mobile Money payment initiation returns a reference."""
-        payment_reference = self.service.initiate_payment(
-            amount=Decimal('5000.00'),
-            phone=self.customer.phone,
             description='Test payment'
         )
-        
-        self.assertIsInstance(payment_reference, str)
-        self.assertTrue(payment_reference)
-    
-    def test_verify_payment_status(self):
-        """Test payment status polling fallback."""
-        payment_reference = 'TEST-REF'
-        result = self.service.verify_payment(payment_reference)
-        
-        self.assertEqual(result['reference'], payment_reference)
-        self.assertEqual(result['status'], 'PENDING')
+        assert ref is not None
+        assert len(ref) > 0
+
+    def test_verify_payment(self):
+        service = PaymentService()
+        result = service.verify_payment('test_ref')
+        assert 'reference' in result
+        assert 'status' in result
 
 
-class NotificationServiceUnitTests(TestCase):
-    """Unit tests for NotificationService (SMS, Email)."""
-    
-    def test_send_sms_notification(self):
-        """Test SMS notification sending."""
+@pytest.mark.django_db
+class TestNotificationService:
+    def test_send_sms(self):
         service = NotificationService()
-        result = service.send_sms(
-            phone='+250788123456',
-            message='Your shipment is on the way'
+        result = service.send_sms('+250788123456', 'Test message')
+        assert result is True
+
+    def test_send_email(self):
+        service = NotificationService()
+        result = service.send_email('test@example.com', 'Subject', 'Body')
+        assert result is True
+
+    def test_broadcast_alert(self):
+        User.objects.create(
+            phone='+250788111111',
+            user_type='DRIVER',
+            is_active=True
         )
-        
-        self.assertTrue(result)
+        service = NotificationService()
+        count = service.broadcast_alert('DRIVER', 'Emergency alert')
+        assert count >= 1

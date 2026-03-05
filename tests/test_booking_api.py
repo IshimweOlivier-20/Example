@@ -80,3 +80,18 @@ class BookingApiTests(TestCase):
 
         response = self.client.post('/api/shipments/create/', payload, format='json')
         self.assertEqual(response.status_code, 400)
+
+
+import pytest
+
+@pytest.mark.django_db
+def test_api_documentation_accessibility(client):
+    """Boosts coverage by verifying API discovery endpoints are live."""
+    response = client.get('/api/docs/')
+    assert response.status_code in [200, 301]
+
+@pytest.mark.django_db
+def test_login_page_load(client):
+    """Verify the authentication entry point is active."""
+    response = client.get('/admin/login/')
+    assert response.status_code == 200

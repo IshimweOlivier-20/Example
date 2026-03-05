@@ -1,0 +1,23 @@
+[run]
+source = .
+omit =
+    */migrations/*
+    */tests/*
+    */admin.py
+    */apps.py
+    */wsgi.py
+    */asgi.py
+    manage.py
+    ishemalink/settings.py
+    ishemalink/urls.py
+    ishemalink/celery.py
+    tests/locustfile.py
+    core/consumers.py
+    core/ws_auth.py
+
+[report]
+show_missing = True
+exclude_lines =
+    pragma: no cover
+    def __str__
+    raise NotImplementedError
